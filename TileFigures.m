@@ -1,17 +1,22 @@
-function [varargout] = TileFigures(figs, Nrows, Ncols, box, monitor_id)
+function [varargout] = TileFigures(figs, Nrows, Ncols, monitor_id, spacer ,box)
 % TileFigures()
-% TileFigures(figs, Nrows, Ncols, box, monitor_id)
-% TileFigures([], [], [], [], [])
+% TileFigures(figs, Nrows, Ncols, monitor_id, spacer ,box)
+% TileFigures([], [], [], [], [], [])
 % [config] = TileFigures(...)
 % TileFigures(config)
 % Tile matlab figures, so that they can be viewed simultaneously, or just more easily managed.
 % INPUT  :
+%       figs : Handles (or indices) array of figures to arrange (default: all)
 %      Nrows : Number of rows (vertical grid) of figures
 %      Ncols : Number of columns (horizontal grid) of figures 
-%        box : define a subsection of the screen by [Woffset, Hoffset, Wportion, Hportion]
-%              all elements of box should be normalized (0 - 1)
-% monitor_id : monitor index to place images (default: same as matlab window)
-%     figIdx : handles (or indices) array of figures to arrange (default: all)
+% monitor_id : Monitor index to place images (default: same as matlab window)
+%     spacer : Gap space between figures, specified as a ratio (0 <= spacer < 0.5),
+%              either scalar or a 4-element vector:[left, down, right, up].
+%              Should NOT exceed 0.5 in any direction, or sum to 1 (or more) in any dimension.
+%        box : Define a subsection of the screen by [Woffset, Hoffset, Wportion, Hportion]
+%              in which the figures will be confined.
+%              All elements of 'box' are normalized i.e. in the range: (0 - 1)
+%     
 %   
 %              - any or all of the above inputs can be manualy specified, or left
 %                empty ([]) for default values.
@@ -29,18 +34,35 @@ function [varargout] = TileFigures(figs, Nrows, Ncols, box, monitor_id)
 
 
 %% Controls:
-cascade = 20;      % cascade figures by this number of pixeles (when too many figures), set to zero to totaly cover.
+cascade = 20;      % cascade figures by this number of pixeles (when too many figures), set to zero for total overlap.
 maxGrid = [3, 6];  % maximum auto grid (doesn't apply to explicit values)
 undock  = true;    % controls whether docked figures will be undocked or left docked.
-task_bar_offset = [0 50];
+task_bar_offset = [0, 50]; % [0, 50] : assumes bottom task bar. 
+%            use: [0, -50] for top task bar 
+%                 [50,  0] for left task bar 
+%                 [-50, 0] for Right task bar
+%                 [0 ,  0] for no task bar
 extendOnGrid = true; % controls whether figures will be automatically extended to empty grid slots.
 
 %% Parse inputs:
-if nargin < 5 || isempty(monitor_id)
-    monitor_id = getMatlabMainScreen(); %1;
-end
-if nargin < 4 || isempty(box)
+if nargin < 6 || isempty(box)
     box = [0, 0, 1, 1];
+end
+if nargin < 5 || isempty(spacer)
+    spacer  = [1, 1, 1, 1]/400; 
+else
+    if numel(spacer) == 1
+        spacer = ones(1,4) *spacer;
+    end
+    maxSpacer = 50;%percent    
+    assert(max(spacer(1:2) + spacer(3:4))<1,'The spacer specified leaves no space for figures.');    
+    assert(max(spacer(1:2) + spacer(3:4))<=maxSpacer/100,'Spacer must not exceed %d%.',maxSpacer);    
+end
+if nargin < 4 || isempty(monitor_id)
+    monitor_id = 0;
+    while monitor_id == 0 % don't know why this happens
+        monitor_id = getMatlabMainScreen(); %1;
+    end
 end
 if nargin < 3 || isempty(Ncols)
     Ncols = 0;
@@ -56,6 +78,15 @@ if nargin < 1 || isempty(figs)
     figHandle = sortFigureHandles(figHandle);
     figs = 1:length(figHandle);
 elseif isnumeric(figs) && ~isempty(figs)   %figure indices
+    if numel(figs) > length(figs) %matrix form
+        if Ncols*Nrows == numel(figs) % provided correct size -> 
+            %convert to vector while preserving configuration:
+            figs = figs';
+            figs = figs(:)';
+        else % just linearize;
+            figs = figs(:)';
+        end
+    end
     figHandle = findobj('Type','figure');
     if isempty(figHandle)
         warning('No figures. Go figure...');
@@ -87,10 +118,10 @@ if monitor_id > size(screen_sz,1)
     return;
 end
 screen_sz = screen_sz(monitor_id, :);
-scn_w =  screen_sz(3) - task_bar_offset(1);
-scn_h =  screen_sz(4) - task_bar_offset(2);
-scn_w_begin = screen_sz(1) + task_bar_offset(1) + box(1) * scn_w;
-scn_h_begin = screen_sz(2) + task_bar_offset(2) + box(2) * scn_h;
+scn_w =  screen_sz(3) - abs(task_bar_offset(1));
+scn_h =  screen_sz(4) - abs(task_bar_offset(2));
+scn_w_begin = screen_sz(1) + max(0,task_bar_offset(1)) + box(1) * scn_w;
+scn_h_begin = screen_sz(2) + max(0,task_bar_offset(2)) + box(2) * scn_h;
 scn_w = box(3) * scn_w;
 scn_h = box(4) * scn_h;
 
@@ -100,12 +131,12 @@ if N_Grid == 0
     if Nrows == 0
         if Ncols == 0
             Nrows = max(floor(sqrt(n_fig)),1);
-            Ncols = ceil(n_fig/Nrows);
+            Ncols = ceil(n_fig / Nrows);
         else
-            Nrows = ceil(n_fig/Ncols);
+            Nrows = ceil(n_fig / Ncols);
         end
     elseif Ncols == 0
-        Ncols = ceil(n_fig/Nrows);
+        Ncols = ceil(n_fig / Nrows);
     end
     
     
@@ -121,15 +152,16 @@ if N_Grid == 0
 end
 
 
-%% Extend figures to available grid slots: 
+%% Extend figures to available grid slots:
+extendOnGrid = extendOnGrid * 5;
 while N_Grid > n_fig && extendOnGrid
     extra = N_Grid - n_fig;
-    if  figs(end)~= figs(end-1)%extend last row figures sideways
-        xtend = min(extra, Ncols - extra);
-        figXtend = repmat(unique(figs(end+1-xtend:end)),2,1);
-        figs(end-xtend+(1:numel(figXtend))) = figXtend(:)';
+    if  ~isnan(figs(end)) && figs(end)~= figs(end-1) %extend last row figures sideways
+        xtend = min([extra, Ncols - extra, length(figs) - find(isnan(figs), 1, 'last')]);
+        figXtend = repmat(unique(figs(end + 1 - xtend:end)), 2, 1);
+        figs(end - xtend + (1:numel(figXtend))) = figXtend(:)';
     else %extend downwards
-        figMat = zeros(Ncols,Nrows);
+        figMat = zeros(Ncols, Nrows);
         figMat(1:n_fig) = figs;
         figMat = figMat';
         ind = find(figMat == 0);
@@ -138,30 +170,35 @@ while N_Grid > n_fig && extendOnGrid
         figs = figs(:)';
     end
     n_fig = length(figs);
+    extendOnGrid = extendOnGrid - 1; %prevent infinit loop
 end
 
-%% Tile positions:
-fig_width = scn_w/Ncols;
-fig_height = scn_h/Nrows;
+%% Calculate Tiled Figure positions:
+spacer(3:4) = spacer(1:2) + spacer(3:4);
+fig_width = scn_w / Ncols;
+fig_height = scn_h / Nrows;
 figsCopy = figs;
 
 N_Grid = Ncols * Nrows;
 for ii = 1:n_fig
-    if isnan(figs(ii)) || figs(ii)<1 || figs(ii)>length(figHandle) || ~isgraphics(figHandle(figs(ii)),'figure')
+    if isnan(figs(ii)) || figs(ii) < 1 || figs(ii) > length(figHandle) || ~isgraphics(figHandle(figs(ii)), 'figure')
         continue;
     end
-    k = mod(ii-1,Ncols) +1; %column index (horizontal)
-    l = mod((ii - k)/Ncols ,Nrows) +1; %row index (vertical)
-    overlap = floor((ii-1)/(N_Grid));
+    k = mod(ii-1, Ncols) +1; %column index (horizontal)
+    l = mod((ii - k) / Ncols , Nrows) +1; %row index (vertical)
+    overlap = floor((ii - 1) / (N_Grid));
     multiple = find(figs == figs(ii));
     last = multiple(end);
-    nWidth = mod(last-1,Ncols) + 1;
-    nHeight = max(mod((last - nWidth)/Ncols ,Nrows) +2 - l, 1);
+    nWidth = mod(last-1, Ncols) + 1;
+    nHeight = max(mod((last - nWidth) / Ncols ,Nrows) +2 - l, 1);
     nWidth = max(nWidth + 1 - k, 1);
     fig_pos = [scn_w_begin + fig_width * (k-1) + overlap * cascade,...
-        scn_h_begin + scn_h - fig_height * (l + nHeight - 1) - overlap * cascade,...
-        nWidth * fig_width,...
-        nHeight * fig_height];    
+        0,0,...
+        min(nHeight * fig_height, scn_h - fig_height *(l + nHeight - 2) - overlap *cascade)];
+    fig_pos(2:3) = [scn_h_begin + scn_h - fig_height *(l + nHeight - 2) - overlap *cascade - fig_pos(4),...
+        min(nWidth * fig_width, scn_w - fig_pos(1) +  scn_w_begin)];
+    fig_pos(1:2) = fig_pos(1:2) + spacer(1:2).*[fig_width, fig_height];
+    fig_pos(3:4) = fig_pos(3:4) .* (1 - spacer(3:4));
     figs(multiple) = nan;
     fig_pos_cell{ii} = fig_pos;
 end

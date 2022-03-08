@@ -112,7 +112,7 @@ for iMon = config.monitorIndx
         if isfield(config,'config') && length(config.config) >=iMon
             TileFigures(config.config{iMon});
         else
-            config.config{iMon} = TileFigures(config.figHandle(config.figs(logIndex)), [], [], [], iMon);
+            config.config{iMon} = TileFigures(config.figHandle(config.figs(logIndex(1:length(config.figs)))), [], [], iMon);
         end
     end
 end

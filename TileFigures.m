@@ -1,10 +1,11 @@
-function [varargout] = TileFigures(figs, Nrows, Ncols, monitor_id, spacer ,box)
-% TileFigures()
-% TileFigures(figs, Nrows, Ncols, monitor_id, spacer ,box)
-% TileFigures([], [], [], [], [], [])
-% [config] = TileFigures(...)
-% TileFigures(config)
+function varargout = TileFigures(figs, Nrows, Ncols, monitor_id, spacer ,box)
+% Tile figures over the desktop
+%
+% function TileFigures(figs, Nrows, Ncols, monitor_id, spacer ,box)
+%
+% Purpose
 % Tile matlab figures, so that they can be viewed simultaneously, or just more easily managed.
+%
 % INPUT  :
 %       figs : Handles (or indices) array of figures to arrange (default: all)
 %      Nrows : Number of rows (vertical grid) of figures
@@ -24,7 +25,16 @@ function [varargout] = TileFigures(figs, Nrows, Ncols, monitor_id, spacer ,box)
 % [config] = TileFigures(...)  - additionaly, returns the tile configuration for later re-use:
 % TileFigures(config)          - reinstates figures to saved configuration.
 %
-% Notes
+%
+% Examples
+% TileFigures([], [], [], [], [], [])
+% [config] = TileFigures(...)
+% TileFigures(config)
+%
+% Or just run:
+% TileFigures
+%
+%
 % Created: Elimelech Schreiber 25/12/2018
 % Edited:                      21/01/2019
 % lemelech.bi@gmail.com
@@ -34,7 +44,7 @@ function [varargout] = TileFigures(figs, Nrows, Ncols, monitor_id, spacer ,box)
 
 
 %% Controls:
-cascade = 20;      % cascade figures by this number of pixeles (when too many figures), set to zero for total overlap.
+cascade = 20;      % cascade figures by this number of pixels (when too many figures), set to zero for total overlap.
 maxGrid = [3, 6];  % maximum auto grid (doesn't apply to explicit values)
 undock  = true;    % controls whether docked figures will be undocked or left docked.
 task_bar_offset = [0, 50]; % [0, 50] : assumes bottom task bar. 
@@ -48,6 +58,7 @@ extendOnGrid = true; % controls whether figures will be automatically extended t
 if nargin < 6 || isempty(box)
     box = [0, 0, 1, 1];
 end
+
 if nargin < 5 || isempty(spacer)
     spacer  = [1, 1, 1, 1]/400; 
 else
@@ -58,18 +69,22 @@ else
     assert(max(spacer(1:2) + spacer(3:4))<1,'The spacer specified leaves no space for figures.');    
     assert(max(spacer(1:2) + spacer(3:4))<=maxSpacer/100,'Spacer must not exceed %d%.',maxSpacer);    
 end
+
 if nargin < 4 || isempty(monitor_id)
     monitor_id = 0;
     while monitor_id == 0 % don't know why this happens
         monitor_id = getMatlabMainScreen(); %1;
     end
 end
+
 if nargin < 3 || isempty(Ncols)
     Ncols = 0;
 end
+
 if nargin < 2 || isempty(Nrows)
     Nrows = 0;
 end
+
 if nargin < 1 || isempty(figs)
     figHandle = findobj('Type','figure');
     if isempty(figHandle)
@@ -103,6 +118,7 @@ else
 end
 
 n_fig = length(figs);
+
 if n_fig <= 0
     warning('No figures. Go figure...');
     return
@@ -117,6 +133,7 @@ if monitor_id > size(screen_sz,1)
     %matlab and therefor cannot be accounted for.
     return;
 end
+
 screen_sz = screen_sz(monitor_id, :);
 scn_w =  screen_sz(3) - abs(task_bar_offset(1));
 scn_h =  screen_sz(4) - abs(task_bar_offset(2));
@@ -216,27 +233,27 @@ end
 
 %% Tile figures:
 function TileFiguresStruct(TFstruct) 
-for ii = 1:length(TFstruct.figs)
-    if isnan(TFstruct.figs(ii)) || TFstruct.figs(ii)<1 || TFstruct.figs(ii)>length(TFstruct.figHandle) ||...
-            ~isgraphics(TFstruct.figHandle(TFstruct.figs(ii)),'figure')
-        continue;
+    for ii = 1:length(TFstruct.figs)
+        if isnan(TFstruct.figs(ii)) || TFstruct.figs(ii)<1 || TFstruct.figs(ii)>length(TFstruct.figHandle) ||...
+                ~isgraphics(TFstruct.figHandle(TFstruct.figs(ii)),'figure')
+            continue;
+        end
+        if undock
+            set(TFstruct.figHandle(TFstruct.figs(ii)),'WindowStyle','normal');
+        end
+        figure(TFstruct.figHandle(TFstruct.figs(ii)));
+        originalUnits = get(TFstruct.figHandle(TFstruct.figs(ii)),'Units');
+        set(TFstruct.figHandle(TFstruct.figs(ii)),'Units','Pixels','OuterPosition',TFstruct.fig_pos_cell{ii});
+        set(TFstruct.figHandle(TFstruct.figs(ii)),'Units',originalUnits);
+        multiple = find(TFstruct.figs == TFstruct.figs(ii));
+        TFstruct.figs(multiple) = nan;
     end
-    if undock
-        set(TFstruct.figHandle(TFstruct.figs(ii)),'WindowStyle','normal');
-    end
-    figure(TFstruct.figHandle(TFstruct.figs(ii)));
-    originalUnits = get(TFstruct.figHandle(TFstruct.figs(ii)),'Units');
-    set(TFstruct.figHandle(TFstruct.figs(ii)),'Units','Pixels','OuterPosition',TFstruct.fig_pos_cell{ii});
-    set(TFstruct.figHandle(TFstruct.figs(ii)),'Units',originalUnits);
-    multiple = find(TFstruct.figs == TFstruct.figs(ii));
-    TFstruct.figs(multiple) = nan;
-end
-end
+end %TileFiguresStruct
 
-end
+end % Main
 
 
 function figSorted = sortFigureHandles(figs)
-[~, idx] = sort([figs.Number]);
-figSorted = figs(idx);
-end
+    [~, idx] = sort([figs.Number]);
+    figSorted = figs(idx);
+end % sortFigureHandles
